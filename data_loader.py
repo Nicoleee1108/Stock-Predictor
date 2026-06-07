@@ -1,4 +1,4 @@
-"""Load MSFT OHLCV history and compute regime-detection features."""
+"""Load a ticker's OHLCV history and compute regime-detection features."""
 
 from __future__ import annotations
 
@@ -38,9 +38,21 @@ def compute_features(df: pd.DataFrame, vol_window: int = 20) -> pd.DataFrame:
     return out.dropna()
 
 
-def train_test_split(df: pd.DataFrame, split_date: str = "2018-01-01"):
+def train_test_split(
+    df: pd.DataFrame,
+    split_date: str = "2022-01-01",
+    train_start: str | None = "2000-01-01",
+):
+    """Split chronologically. Train = [train_start, split_date), test = [split_date, end].
+
+    train_start bounds how far back the training window reaches (None = use all history).
+    """
     split = pd.Timestamp(split_date)
-    return df.loc[df.index < split].copy(), df.loc[df.index >= split].copy()
+    train = df.loc[df.index < split]
+    if train_start is not None:
+        train = train.loc[train.index >= pd.Timestamp(train_start)]
+    test = df.loc[df.index >= split]
+    return train.copy(), test.copy()
 
 
 def to_observations(df: pd.DataFrame, feature_cols: list[str]) -> np.ndarray:

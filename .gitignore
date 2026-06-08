@@ -16,6 +16,7 @@ dataset/
 
 figures/
 outputs/
+report.tex
 
 .idea/
 .vscode/

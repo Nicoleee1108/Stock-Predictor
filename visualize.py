@@ -136,7 +136,7 @@ def main(csv_path: str) -> None:
     X_train = to_observations(train, FEATURE_COLS)
     X_full = to_observations(feats, FEATURE_COLS)
 
-    best, all_results = select_n_states(X_train, candidates=[2, 3, 4, 5])
+    best, all_results = select_n_states(X_train, candidates=[2, 3, 4, 5, 6, 7, 8])
     model = best.model
     n_states = best.n_states
     print(f"Selected K={n_states} by BIC on train ({len(X_train)} obs)")

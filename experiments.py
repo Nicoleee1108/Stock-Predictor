@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 logging.getLogger("hmmlearn").setLevel(logging.CRITICAL)
 
@@ -67,12 +68,15 @@ def exp_covariance_type() -> None:
     X_train, X_test = _load(DATA)
     rows = []
     for cov in ["full", "diag", "tied", "spherical"]:
+        t0 = time.perf_counter()
         fit = fit_hmm(X_train, FIXED_K, covariance_type=cov)
+        fit_seconds = time.perf_counter() - t0
         rows.append({
             "covariance_type": cov,
             "train_per_obs_LL": round(fit.log_likelihood / len(X_train), 4),
             "heldout_per_obs_LL": round(_per_obs_ll(fit.model, X_test), 4),
             "BIC": round(fit.bic, 1),
+            "fit_seconds": round(fit_seconds, 3),
             "converged": fit.converged,
         })
     _save_table(pd.DataFrame(rows), "exp_a_covariance_type.md",
@@ -173,7 +177,9 @@ def exp_cross_ticker() -> None:
     rows = []
     for ticker, path in TICKERS.items():
         X_train, X_test = _load(path)
-        best, _ = select_n_states(X_train, candidates=[2, 3, 4, 5])
+        t0 = time.perf_counter()
+        best, _ = select_n_states(X_train, candidates=[2, 3, 4, 5, 6, 7, 8])
+        fit_seconds = time.perf_counter() - t0
         rows.append({
             "ticker": ticker,
             "chosen_K": best.n_states,
@@ -181,6 +187,7 @@ def exp_cross_ticker() -> None:
             "heldout_per_obs_LL": round(_per_obs_ll(best.model, X_test), 4),
             "n_train": len(X_train),
             "n_test": len(X_test),
+            "fit_seconds": round(fit_seconds, 3),
         })
     _save_table(pd.DataFrame(rows), "exp_e_cross_ticker.md",
                 "(e) Cross-ticker model selection")

@@ -80,7 +80,7 @@ def fit_hmm(
 
 def select_n_states(
     X: np.ndarray,
-    candidates: list[int] = (2, 3, 4, 5),
+    candidates: list[int] = (2, 3, 4, 5, 6, 7, 8),
     covariance_type: str = "full",
     n_restarts: int = 5,
     seed: int = 0,
@@ -102,15 +102,34 @@ def state_posteriors(model: GaussianHMM, X: np.ndarray) -> np.ndarray:
     return model.predict_proba(X)
 
 
+def _regime_label(means: dict, vol_median: float) -> str:
+    """Heuristic regime name from a state's mean log_return and realized_vol.
+
+    Volatility is judged relative to the median across states; return by its sign.
+    """
+    ret = means.get("log_return", 0.0)
+    vol = means.get("realized_vol", vol_median)
+    high_vol = vol >= vol_median
+    if ret < 0 and high_vol:
+        return "crisis"
+    if ret > 0 and not high_vol:
+        return "bull"
+    return "neutral/choppy"
+
+
 def regime_summary(model: GaussianHMM, X: np.ndarray, feature_names: list[str]) -> dict:
     """Per-state mean and covariance — used to label regimes (bull/bear/high-vol/etc.)."""
     states = predict_states(model, X)
+    means = [dict(zip(feature_names, model.means_[s])) for s in range(model.n_components)]
+    vols = [m.get("realized_vol", 0.0) for m in means]
+    vol_median = float(np.median(vols)) if vols else 0.0
     summary = {}
     for s in range(model.n_components):
         mask = states == s
         summary[s] = {
             "fraction": float(mask.mean()),
-            "mean": dict(zip(feature_names, model.means_[s])),
+            "mean": means[s],
+            "label": _regime_label(means[s], vol_median),
             "self_transition": float(model.transmat_[s, s]),
         }
     return summary
@@ -129,7 +148,7 @@ if __name__ == "__main__":
     X_train = to_observations(train, cols)
     X_test = to_observations(test, cols)
 
-    best, all_results = select_n_states(X_train, candidates=[2, 3, 4, 5])
+    best, all_results = select_n_states(X_train, candidates=[2, 3, 4, 5, 6, 7, 8])
     print(f"{'K':>3} {'logL':>12} {'BIC':>12} {'AIC':>12} converged")
     for r in all_results:
         print(f"{r.n_states:>3} {r.log_likelihood:>12.1f} {r.bic:>12.1f} {r.aic:>12.1f} {r.converged}")

@@ -152,9 +152,11 @@ This is the actual path we followed, so you can reproduce or extend it.
 3. **Choose the training window.** We deliberately train on **2000–2021** and test
    on **2022+**. (We later *measured* whether a longer window helps — see
    experiment (c).)
-4. **Fit and select K.** `select_n_states` sweeps K ∈ {2,3,4,5}, fits each with
-   multiple restarts, and picks the K with the lowest **BIC** (which trades off fit
-   quality against model complexity). For SPY this chooses **K = 5**.
+4. **Fit and select K.** `select_n_states` sweeps K ∈ {2,3,4,5,6,7,8}, fits each
+   with multiple restarts, and picks the K with the lowest **BIC** (which trades off
+   fit quality against model complexity). For SPY the BIC curve reaches a clear
+   interior minimum at **K = 7** (it turns back up at K = 8), so 7 regimes is a
+   genuine choice, not an artifact of where we cut off the search.
 5. **Evaluate.** Compute the **held-out per-observation log-likelihood** on 2022+
    data — the model's ability to explain data it never saw.
 6. **Interpret.** `regime_summary` reports each state's mean return, mean volatility,
@@ -165,7 +167,16 @@ This is the actual path we followed, so you can reproduce or extend it.
    model class (HMM vs. non-temporal baselines), plus a cross-ticker comparison.
 9. **Review & test.** A separate reviewer pass checked correctness (state/color
    consistency, no look-ahead leakage, consistent per-observation LL across HMM vs.
-   `sklearn` baselines) and re-ran everything end-to-end.
+   `sklearn` baselines) and re-ran everything end-to-end. A `pytest` suite
+   (`test_pipeline.py`, 19 tests) locks in the feature formulas, the chronological
+   split, the parameter counting, and the HMM probability properties.
+
+> **A note on the K search range.** Our first pass searched only K ∈ {2,3,4,5} and
+> BIC picked K = 5 — but the BIC curve was still falling at the boundary, meaning K
+> was pinned to the edge rather than genuinely optimal. We then widened the search
+> to {2,…,8} and found a true interior minimum at **K = 7**. This is the project's
+> clearest example of "measure how performance changes when you change the model,"
+> and a reminder to always confirm a selection curve bottoms out inside its range.
 
 ---
 
@@ -173,7 +184,7 @@ This is the actual path we followed, so you can reproduce or extend it.
 
 ```bash
 # 1. install dependencies
-pip install -r requirements.txt        # numpy, pandas, hmmlearn, matplotlib, scikit-learn
+pip install -r requirements.txt        # numpy, pandas, hmmlearn, matplotlib, scikit-learn, pytest
 pip install yfinance                    # only needed to download data
 
 # 2. download data into dataset/  (SPY, MSFT, AAPL; 2000 -> today)
@@ -188,6 +199,9 @@ python visualize.py dataset/SPY.csv
 
 # 5. run all experiments -> tables into outputs/ (+ one figure)
 python experiments.py
+
+# (optional) run the unit-test suite (fast, no network/data needed)
+pytest -q
 ```
 
 Outputs:
@@ -202,37 +216,47 @@ Outputs:
 
 ## 7. Results: the regimes we found
 
-On SPY, BIC selects **K = 5**. Sorting the states by mean return gives a clean,
-interpretable spectrum (no labels were ever provided — the model discovered this on
-its own):
+On SPY, BIC selects **K = 7** (held-out per-observation log-likelihood **5.92**).
+Sorting the states by mean return gives a clean, interpretable spectrum from deep
+crises up to calm bull markets — no labels were ever provided, the model discovered
+this on its own. (`regime_summary` also attaches a heuristic `label` per state:
+*crisis / neutral-choppy / bull*, derived from its mean return and volatility.)
 
-| Regime | % of days | Mean daily return | Annualized volatility | Self-transition | Interpretation |
+| Regime (by ↑ mean return) | Auto-label | % of days | Mean daily return | Annualized volatility | Self-transition |
 |---|---|---|---|---|---|
-| 🟢 Calm bull   | 41% | +0.063% | 0.087 (very low) | 0.980 | steady uptrend, the dominant state |
-| 🟢 Normal up   | 26% | +0.024% | 0.14 | 0.944 | ordinary rising market |
-| 🟡 Choppy      | 19% | ~0.000% | 0.20 | 0.953 | sideways / indecisive |
-| 🟠 Stressed    | 10% | −0.019% | 0.29 | 0.954 | elevated risk, mild losses |
-| 🔴 Crisis      | 4%  | −0.035% | 0.54 (very high) | 0.974 | crashes (2008, 2020) |
+| Deep crisis    | crisis         | 4%  | −0.037% | 0.54 (very high) | 0.974 |
+| Stress         | crisis         | 9%  | −0.010% | 0.29 | 0.951 |
+| Mild down      | crisis         | 16% | −0.010% | 0.17 | 0.913 |
+| Choppy         | neutral/choppy | 14% | +0.008% | 0.21 | 0.933 |
+| Normal up      | bull           | 16% | +0.038% | 0.13 | 0.902 |
+| Steady bull    | bull           | 22% | +0.047% | 0.10 | 0.931 |
+| Calm bull      | bull           | 19% | +0.079% | 0.071 (very low) | 0.961 |
 
 Three things to notice — each one validates the theory:
 
-- **Volatility rises and return falls monotonically** across the regimes. The HMM
-  rediscovered the well-known "calmer markets drift up, turbulent markets fall"
-  pattern with **no supervision**.
-- **Every self-transition is > 0.94**, confirming regimes are *persistent* — the
+- **Volatility and return move in opposite directions** across the regimes: the
+  calm states drift up, the turbulent states fall. The HMM rediscovered this
+  well-known market pattern with **no supervision**.
+- **Every self-transition is > 0.90**, confirming regimes are *persistent* — the
   Markov chain is capturing the real-world stickiness of market moods.
-- **The crisis regime is rare (4%)**, which is exactly why having a long training
-  history matters (it needs to see 2008 and 2020 to learn that state).
+- **The deep-crisis regime is rare (4%)**, which is exactly why having a long
+  training history matters (it needs to see 2008 and 2020 to learn that state).
+
+> *Why 7 and not 5?* On the original short search range {2,3,4,5}, BIC was still
+> decreasing at the boundary, so K was pinned to the edge — an unreliable choice.
+> Widening the range to {2,…,8} revealed the true interior minimum at K = 7. This
+> is a good lesson: always confirm a model-selection curve actually *bottoms out*
+> inside your search range.
 
 ### Figures (in `figures/`)
 
 | File | What it shows |
 |---|---|
-| `01_price_regimes.png` | SPY price (log scale) shaded by the Viterbi regime — 2008 & 2020 light up red |
+| `01_price_regimes.png` | SPY price (log scale) shaded by the Viterbi regime — states are ordered by mean return, so calm bull markets are warm/red and the 2008 & 2020 crises show up in the cool/blue end |
 | `02_realized_vol.png` | realized volatility over time |
 | `03_state_posteriors.png` | daily posterior P(state) as a stacked area chart |
 | `04_emission_ellipses.png` | observations + each regime's 2-σ Gaussian ellipse in the return–vol plane |
-| `05_model_selection.png` | BIC / AIC vs K |
+| `05_model_selection.png` | BIC / AIC vs K (K = 2…8); dashed line marks the interior minimum at K = 7 |
 | `06_training_window.png` | held-out LL vs training-window start year |
 
 ---
@@ -246,7 +270,10 @@ test set (higher = better generalization). Tables are saved in `outputs/`.
 At fixed K=4: `full` and `diag` are best and essentially tied (held-out 5.464 /
 5.465); `full` has the best BIC (−59182). `tied` (4.842) and `spherical` (5.108)
 are clearly worse. **Takeaway:** regimes genuinely differ in their full covariance
-structure; forcing them to share a covariance hurts.
+structure; forcing them to share a covariance hurts. The table also reports
+**fit time** (`fit_seconds`): `full` is the slowest to fit (~3.2s) and `diag` the
+fastest (~1.7s), the expected accuracy/speed trade-off — but here `full` and `diag`
+are close enough in quality that `diag` is a reasonable cheaper choice.
 
 ### (b) Feature ablation — `outputs/exp_b_feature_ablation.md`
 `[log_return]` alone vs `+realized_vol` vs `+volume_z`. Adding **realized
@@ -279,9 +306,14 @@ gap is direct evidence that **modeling regime persistence over time genuinely
 helps** — the whole premise of the project.
 
 ### (e) Cross-ticker — `outputs/exp_e_cross_ticker.md`
-Running the full pipeline on each ticker: all three select **K = 5**. Held-out
-per-obs LL: **SPY 5.628 > MSFT 4.591 > AAPL 4.396**. SPY (the index) is the most
-predictable, consistent with single stocks carrying extra idiosyncratic noise.
+Running the full pipeline (K-sweep 2…8) on each ticker: SPY and MSFT select
+**K = 7**, AAPL selects **K = 8**. Held-out per-obs LL: **SPY 5.92 > AAPL 4.91 >
+MSFT 4.87**. SPY (the broad index) is by far the most predictable, consistent with
+single stocks carrying extra idiosyncratic noise. The table also reports the full
+selection time (`fit_seconds`, ~26–32s per ticker for the whole 7-value sweep with
+5 restarts each). *(Caveat: AAPL's BIC is still lowest at the K = 8 boundary, so its
+true optimum may be even higher — for AAPL specifically the search range could be
+extended further.)*
 
 ### Summary of findings
 - The HMM's **temporal structure is the main source of its advantage** (d).
@@ -301,13 +333,14 @@ predictable, consistent with single stocks carrying extra idiosyncratic noise.
 | `hmm_model.py` | fit Gaussian HMM (multi-restart EM), BIC model selection, regime summary |
 | `visualize.py` | produce the 6 report figures into `figures/` |
 | `experiments.py` | the 5 controlled experiments → tables in `outputs/` |
+| `test_pipeline.py` | pytest unit tests (features, split, param counting, HMM properties) |
 | `requirements.txt` | Python dependencies |
 | `dataset/`, `figures/`, `outputs/` | data and generated artifacts (git-ignored) |
 
 Key functions:
 - `data_loader.train_test_split(df, split_date="2022-01-01", train_start="2000-01-01")`
 - `hmm_model.fit_hmm(X, n_states, covariance_type="full", n_restarts=5)`
-- `hmm_model.select_n_states(X, candidates=(2,3,4,5))` → best by BIC
+- `hmm_model.select_n_states(X, candidates=(2,3,4,5,6,7,8))` → best by BIC
 - `hmm_model.regime_summary(model, X, feature_names)`
 
 ---

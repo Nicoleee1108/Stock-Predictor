@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     from data_loader import compute_features, load_ohlcv, to_observations, train_test_split
 
-    path = sys.argv[1] if len(sys.argv) > 1 else "MSFT.csv"
+    path = sys.argv[1] if len(sys.argv) > 1 else "dataset/SPY.csv"
     feats = compute_features(load_ohlcv(path))
     train, test = train_test_split(feats)
 

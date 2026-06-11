@@ -65,7 +65,7 @@ def to_observations(df: pd.DataFrame, feature_cols: list[str]) -> np.ndarray:
 if __name__ == "__main__":
     import sys
 
-    path = sys.argv[1] if len(sys.argv) > 1 else "MSFT.csv"
+    path = sys.argv[1] if len(sys.argv) > 1 else "dataset/SPY.csv"
     raw = load_ohlcv(path)
     feats = compute_features(raw)
     train, test = train_test_split(feats)

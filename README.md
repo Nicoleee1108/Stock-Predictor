@@ -267,13 +267,14 @@ All experiments report **held-out per-observation log-likelihood** on the 2022+
 test set (higher = better generalization). Tables are saved in `outputs/`.
 
 ### (a) Covariance type — `outputs/exp_a_covariance_type.md`
-At fixed K=4: `full` and `diag` are best and essentially tied (held-out 5.464 /
-5.465); `full` has the best BIC (−59182). `tied` (4.842) and `spherical` (5.108)
-are clearly worse. **Takeaway:** regimes genuinely differ in their full covariance
-structure; forcing them to share a covariance hurts. The table also reports
-**fit time** (`fit_seconds`): `full` is the slowest to fit (~3.2s) and `diag` the
-fastest (~1.7s), the expected accuracy/speed trade-off — but here `full` and `diag`
-are close enough in quality that `diag` is a reasonable cheaper choice.
+At the selected K=7: `full` wins on both held-out LL (5.922 vs `diag`'s 5.894) and
+BIC (−63,996 vs −63,524) — at this model size the within-regime return–volatility
+correlation carries enough signal to justify the extra parameters. `tied` (5.390)
+is clearly worse; `spherical` (5.853) trails too. On timing (`fit_seconds`): `full`
+is slowest (~9.4s), `spherical` fastest (~4.0s), `diag` in between (~7.2s).
+**Takeaway:** regimes genuinely differ in their covariance structure, and at K=7
+the full covariance earns its cost. (Fun fact: at a smaller K=4, `diag` used to
+win — the best covariance complexity depends on the number of states.)
 
 ### (b) Feature ablation — `outputs/exp_b_feature_ablation.md`
 `[log_return]` alone vs `+realized_vol` vs `+volume_z`. Adding **realized
@@ -285,8 +286,8 @@ regime model," not a raw LL ranking.)*
 
 ### (c) Training window — `outputs/exp_c_training_window.md` + `figures/06_training_window.png`
 Sweeping the training start year {2000, 2005, 2010, 2015} against the same 2022+
-test set, held-out LL is **best with the longest history** (2000 → 5.464) and
-declines as the window shortens (2015 → 5.384). **Takeaway:** more history wins here
+test set, held-out LL is **best with the longest history** (2000 → 5.922); every
+shorter window is worse (5.875–5.897). **Takeaway:** more history wins here
 — the extra data (including the 2008 crisis) outweighs the non-stationarity
 concern. This directly answers the design question "is older data too old?": for
 this model, no.
@@ -296,11 +297,11 @@ The key experiment. We compare the HMM to models with **no temporal structure**:
 
 | Model | Held-out per-obs LL |
 |---|---|
-| **HMM (K=4)** | **5.464** |
-| GMM (K=4, same emissions, no transitions) | 4.592 |
+| **HMM (K=7)** | **5.922** |
+| GMM (K=7, same emissions, no transitions) | 4.605 |
 | Single Gaussian | 4.106 |
 
-The HMM beats the same-K GMM by **+0.873 per observation**. The *only* difference
+The HMM beats the same-K GMM by **+1.32 per observation**. The *only* difference
 between the HMM and the GMM is the transition matrix (the Markov structure), so this
 gap is direct evidence that **modeling regime persistence over time genuinely
 helps** — the whole premise of the project.
@@ -318,7 +319,7 @@ extended further.)*
 ### Summary of findings
 - The HMM's **temporal structure is the main source of its advantage** (d).
 - **Volatility is the essential feature** (b); volume adds nothing here.
-- **Full/diagonal covariance** is the right complexity (a).
+- **Full covariance earns its extra parameters at K=7** — best held-out LL and BIC (a).
 - **More training history helps** on this data (c).
 - The approach **generalizes across tickers**, working best on the broad index (e).
 

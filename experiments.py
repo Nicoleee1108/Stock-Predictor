@@ -27,7 +27,9 @@ OUT_DIR = "outputs"
 FIG_DIR = "figures"
 
 # K fixed for the design-choice experiments (a/b/d) so comparisons are apples-to-apples.
-FIXED_K = 4
+# Set to the BIC-selected K from the 2..8 sweep (Sec 3.1) so the experiments use the
+# same model size as the main result.
+FIXED_K = 7
 
 
 def _per_obs_ll(model, X: np.ndarray) -> float:
